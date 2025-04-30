@@ -33,7 +33,7 @@ def get_file_id(file_name):
     files = results.get("files", [])
     return files[0]["id"] if files else None
 
-    # Google Sheets ファイルを Excel にエクスポートしてダウンロードする関数
+# Google SheetsをExcelに変換してダウンロード
 def download_google_sheets_file(file_id):
     request = drive_service.files().export_media(fileId=file_id, mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     fh = io.BytesIO()
@@ -44,37 +44,14 @@ def download_google_sheets_file(file_id):
     fh.seek(0)
     return fh
 
-# Chromeのオプションを設定
+# Chromeオプション設定
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument('--headless=new')
 CHROME_OPTIONS.add_argument('--no-sandbox')
 CHROME_OPTIONS.add_argument('--disable-dev-shm-usage')
 
-# Chrome WebDriverのインスタンスを作成
-driver = webdriver.Chrome(options=CHROME_OPTIONS)
-
-# 検索キーワード
-keyword = '#プリオケ'
-
-# URLエンコード
-url_encoded_keyword = urllib.parse.quote(keyword)
-
-# Yahooリアルタイム検索ページを開く
-driver.get(f'https://search.yahoo.co.jp/realtime/search?p={url_encoded_keyword}')
-time.sleep(2)  # ページ読み込み待機
-
-# 「タイムラインの自動更新を停止」ボタンをクリック
-try:
-    tab_element = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH, '//div[contains(@class, "Tab_")]'))
-    )
-    tab_element.click()
-    time.sleep(1)
-except TimeoutException:
-    print("タブ要素が見つかりませんでした。スキップします。")
-
+# ツイートテキスト取得関連
 def extract_tweet_texts(tweet_elements):
-    """ ツイートのテキストを取得 """
     tweet_texts = []
     for tweet_element in tweet_elements:
         try:
@@ -85,14 +62,12 @@ def extract_tweet_texts(tweet_elements):
     return tweet_texts
 
 def find_show_more_button(driver):
-    """ もっと見るボタンを取得 """
     try:
         return driver.find_element(By.XPATH, '//button[contains(@class, "More_")]')
     except NoSuchElementException:
         return None
 
 def click_show_more_button(driver):
-    """ もっと見るボタンをクリック """
     button = find_show_more_button(driver)
     if button:
         button.click()
@@ -101,38 +76,56 @@ def click_show_more_button(driver):
     return False
 
 def extract_tweet_elements(driver, max_tweets=100):
-    """ ツイート要素を取得（スクロール＆「もっと見る」クリック） """
     while True:
         tweet_elements = driver.find_elements(By.XPATH, '//div[contains(@class, "Tweet_TweetContainer")]')
-
         if len(tweet_elements) >= max_tweets or not find_show_more_button(driver):
             break
-
         click_show_more_button(driver)
-
     return tweet_elements[:max_tweets]
 
-# ツイートを取得
-tweet_elements = extract_tweet_elements(driver, max_tweets=100)
+# 検索キーワード
+keyword = '#プリオケ'
+url_encoded_keyword = urllib.parse.quote(keyword)
 
-# ツイートのテキストを取得
-tweet_texts = extract_tweet_texts(tweet_elements)
+# 収集結果を格納するリスト
+all_tweet_texts = []
 
-print("取得したツイート数:", len(tweet_texts))
-#print("\n".join(tweet_texts))  # 改行表示
+# WebDriver起動
+driver = webdriver.Chrome(options=CHROME_OPTIONS)
 
-# WebDriverを閉じる
-driver.quit()
+try:
+    for i in range(2):  # とりあえず25回繰り返し
+        print(f"{i+1}回目の取得中...")
 
-# ツイートテキストをDataFrameに変換
-df = pd.DataFrame(tweet_texts, columns=['Tweet'])
+        # Yahooリアルタイム検索ページを開く
+        driver.get(f'https://search.yahoo.co.jp/realtime/search?p={url_encoded_keyword}')
+        time.sleep(2)  # ページ読み込み待機
 
-#print("取得したツイート数:", len(tweet_texts))
-#print("\n".join(tweet_texts))  # 改行表示
+        # 「タイムラインの自動更新を停止」タブをクリック（最初だけ出ることがある）
+        try:
+            tab_element = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, '//div[contains(@class, "Tab_")]'))
+            )
+            tab_element.click()
+            time.sleep(1)
+        except TimeoutException:
+            pass  # 見つからないなら無視
 
-# WebDriverを閉じる
-driver.quit()
+        # ツイート取得
+        tweet_elements = extract_tweet_elements(driver, max_tweets=100)
+        tweet_texts = extract_tweet_texts(tweet_elements)
+        all_tweet_texts.extend(tweet_texts)
 
+        print(f"　取得ツイート数: {len(tweet_texts)}")
+
+        time.sleep(5)  # 間隔：とりあえず5秒ごとに取得
+
+finally:
+    driver.quit()
+
+print("全取得完了。総ツイート数:", len(all_tweet_texts))
+
+# ここから保存処理
 # 記録ファイルの取得と更新
 history_file = "Priorche_tweet_shukei.xlsx"
 history_id = get_file_id(history_file)
@@ -145,14 +138,10 @@ if history_id:
     else:
         history_df = pd.read_excel(f"https://drive.google.com/uc?id={history_id}")
 else:
-    history_df = pd.DataFrame()
-
-# A列（ツイート内容）のみ記録
-if history_df.empty:
     history_df = pd.DataFrame(columns=["Tweet"])
 
-# new_data DataFrameを作成（ツイートのみ）
-new_data = pd.DataFrame({'Tweet': tweet_texts})
+# new_data DataFrameを作成
+new_data = pd.DataFrame({'Tweet': all_tweet_texts})
 
 # データを追記
 history_df = pd.concat([history_df, new_data], ignore_index=True)
