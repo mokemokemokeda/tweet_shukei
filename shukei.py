@@ -13,6 +13,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from datetime import datetime
 import io
+import os
 
 # 環境変数からサービスアカウントキーを取得
 google_credentials_json = os.getenv("GOOGLE_SERVICE_ACCOUNT")
