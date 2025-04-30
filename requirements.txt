@@ -6,5 +6,5 @@ pandas
 xlsxwriter
 requests
 openpyxl
-sekenium
+selenium
 chromium-chromedriver
