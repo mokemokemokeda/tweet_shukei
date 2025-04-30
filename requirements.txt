@@ -7,4 +7,3 @@ xlsxwriter
 requests
 openpyxl
 selenium
-chromium-chromedriver
