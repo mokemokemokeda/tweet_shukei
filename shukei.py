@@ -94,7 +94,7 @@ all_tweet_texts = []
 driver = webdriver.Chrome(options=CHROME_OPTIONS)
 
 try:
-    for i in range(2):  # とりあえず25回繰り返し
+    for i in range(240):  # とりあえず240回繰り返し
         print(f"{i+1}回目の取得中...")
 
         # Yahooリアルタイム検索ページを開く
@@ -118,7 +118,7 @@ try:
 
         print(f"　取得ツイート数: {len(tweet_texts)}")
 
-        time.sleep(5)  # 間隔：とりあえず5秒ごとに取得
+        time.sleep(60)  # 間隔：とりあえず1分ごとに取得
 
 finally:
     driver.quit()
