@@ -27,4 +27,4 @@ jobs:
       - name: Run script
         env:
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
-        run: python shukei2.py
+        run: python shukei.py
