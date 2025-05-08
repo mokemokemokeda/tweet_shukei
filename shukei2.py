@@ -12,6 +12,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from datetime import datetime
+from pytz import timezone
 import io
 import os
 import json
@@ -44,6 +45,10 @@ def download_google_sheets_file(file_id):
     fh.seek(0)
     return fh
 
+# 日本時間の現在時刻取得
+def get_japan_now():
+    return datetime.now(timezone('Asia/Tokyo')).strftime("%Y-%m-%d %H:%M:%S")
+
 # Chromeオプション
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument('--headless=new')
@@ -65,10 +70,12 @@ def extract_tweets(driver, max_tweets=100):
             screen_name = el.find_element(By.XPATH, './/a[contains(@class, "Tweet_authorID")]').text.lstrip('@')
             time_element = el.find_element(By.XPATH, './/time')
             tweet_time = time_element.text
+            now_japan_time = get_japan_now()
             tweets_data.append({
                 "Tweet": tweet_text,
                 "ScreenName": screen_name,
-                "TweetTime": tweet_time
+                "TweetTime": tweet_time,
+                "CollectedTime_JST": now_japan_time
             })
         except NoSuchElementException:
             continue
@@ -133,7 +140,7 @@ if history_id:
     else:
         history_df = pd.read_excel(f"https://drive.google.com/uc?id={history_id}")
 else:
-    history_df = pd.DataFrame(columns=["Tweet", "ScreenName", "TweetTime"])
+    history_df = pd.DataFrame(columns=["Tweet", "ScreenName", "TweetTime", "CollectedTime_JST"])
 
 new_df = pd.DataFrame(all_tweet_data)
 history_df = pd.concat([history_df, new_df], ignore_index=True)
