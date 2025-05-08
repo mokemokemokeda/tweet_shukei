@@ -11,30 +11,29 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
-from datetime import datetime, timedelta
+from datetime import datetime
 import io
 import os
 import json
-import re
 
-# 環境変数からサービスアカウントキーを取得
+# サービスアカウントキー取得
 google_credentials_json = os.getenv("GOOGLE_SERVICE_ACCOUNT")
 if not google_credentials_json:
     raise ValueError("GOOGLE_SERVICE_ACCOUNT が設定されていません。")
 json_data = json.loads(google_credentials_json)
 
-# Googleサービスアカウントデータ
+# Google Driveサービス
 credentials = service_account.Credentials.from_service_account_info(json_data)
 drive_service = build("drive", "v3", credentials=credentials)
 
-# Google Drive からファイル ID を取得する関数
+# ファイル ID 取得
 def get_file_id(file_name):
     query = f"name = '{file_name}' and trashed = false"
     results = drive_service.files().list(q=query, fields="files(id, name)").execute()
     files = results.get("files", [])
     return files[0]["id"] if files else None
 
-# Google SheetsをExcelに変換してダウンロード
+# Google Sheets→Excelダウンロード
 def download_google_sheets_file(file_id):
     request = drive_service.files().export_media(fileId=file_id, mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     fh = io.BytesIO()
@@ -45,62 +44,31 @@ def download_google_sheets_file(file_id):
     fh.seek(0)
     return fh
 
-# Chromeオプション設定
+# Chromeオプション
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument('--headless=new')
 CHROME_OPTIONS.add_argument('--no-sandbox')
 CHROME_OPTIONS.add_argument('--disable-dev-shm-usage')
 
-# ツイート時間の正規化
-def parse_tweet_time(tweet_time_str):
-    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
-    if "分前" in tweet_time_str:
-        minutes_ago = int(re.search(r'(\d+)分前', tweet_time_str).group(1))
-        return (now - timedelta(minutes=minutes_ago)).strftime('%Y-%m-%d %H:%M')
-    elif "時間前" in tweet_time_str:
-        hours_ago = int(re.search(r'(\d+)時間前', tweet_time_str).group(1))
-        return (now - timedelta(hours=hours_ago)).strftime('%Y-%m-%d %H:%M')
-    elif "昨日" in tweet_time_str:
-        match = re.search(r'昨日\s*(\d{1,2}):(\d{2})', tweet_time_str)
-        if match:
-            hour, minute = int(match.group(1)), int(match.group(2))
-            tweet_time = datetime.utcnow().replace(hour=hour, minute=minute, second=0, microsecond=0) - timedelta(days=1)
-            adjusted = tweet_time + timedelta(hours=9)
-            return (tweet_time if adjusted > now else adjusted).strftime('%Y-%m-%d %H:%M')
-    else:
-        match = re.search(r'(\d{1,2})/(\d{1,2})\s*(\d{1,2}):(\d{2})', tweet_time_str)
-        if match:
-            month, day, hour, minute = map(int, match.groups())
-            year = now.year
-            tweet_time = datetime(year, month, day, hour, minute)
-            adjusted = tweet_time + timedelta(hours=9)
-            return (tweet_time if adjusted > now else adjusted).strftime('%Y-%m-%d %H:%M')
-    return tweet_time_str
-
-# ツイート取得ロジック
-def extract_tweet_elements(driver, max_tweets=100):
+# ツイート抽出
+def extract_tweets(driver, max_tweets=100):
+    tweets_data = []
     while True:
         tweet_elements = driver.find_elements(By.XPATH, '//div[contains(@class, "Tweet_TweetContainer")]')
         if len(tweet_elements) >= max_tweets or not find_show_more_button(driver):
             break
         click_show_more_button(driver)
-    return tweet_elements[:max_tweets]
-
-def extract_tweets(driver, max_tweets=100):
-    tweets_data = []
-    tweet_elements = extract_tweet_elements(driver, max_tweets=max_tweets)
-    for tweet_element in tweet_elements:
+    
+    for el in tweet_elements[:max_tweets]:
         try:
-            body = tweet_element.find_element(By.XPATH, './/div[contains(@class, "Tweet_body")]').text
-            screen_name_elem = tweet_element.find_element(By.XPATH, './/span[contains(@class, "TweetScreenName")]')
-            screen_name = screen_name_elem.text.lstrip('@')  # @除去
-            time_elem = tweet_element.find_element(By.XPATH, './/time')
-            raw_time = time_elem.text
-            parsed_time = parse_tweet_time(raw_time)
+            tweet_text = el.find_element(By.XPATH, './/div[contains(@class, "Tweet_body")]').text
+            screen_name = el.find_element(By.XPATH, './/a[contains(@class, "Tweet_authorID")]').text.lstrip('@')
+            time_element = el.find_element(By.XPATH, './/time')
+            tweet_time = time_element.text
             tweets_data.append({
-                "Tweet": body,
+                "Tweet": tweet_text,
                 "ScreenName": screen_name,
-                "TweetTime": parsed_time
+                "TweetTime": tweet_time
             })
         except NoSuchElementException:
             continue
@@ -120,39 +88,40 @@ def click_show_more_button(driver):
         return True
     return False
 
-# 実行本体
+# 検索キーワード
 keyword = '#プリオケ'
 url_encoded_keyword = urllib.parse.quote(keyword)
-all_tweets = []
 
+# WebDriver起動
 driver = webdriver.Chrome(options=CHROME_OPTIONS)
 
+all_tweet_data = []
 try:
-    for i in range(2):
+    for i in range(2):  # 2回繰り返し
         print(f"{i+1}回目の取得中...")
         driver.get(f'https://search.yahoo.co.jp/realtime/search?p={url_encoded_keyword}')
         time.sleep(2)
 
         try:
-            tab = WebDriverWait(driver, 5).until(
+            tab_element = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.XPATH, '//div[contains(@class, "Tab_")]'))
             )
-            tab.click()
+            tab_element.click()
             time.sleep(1)
         except TimeoutException:
             pass
 
-        tweets = extract_tweets(driver, max_tweets=100)
-        all_tweets.extend(tweets)
-        print(f"　取得ツイート数: {len(tweets)}")
-        time.sleep(5)
+        tweet_data = extract_tweets(driver, max_tweets=100)
+        all_tweet_data.extend(tweet_data)
+        print(f"　取得ツイート数: {len(tweet_data)}")
 
+        time.sleep(5)
 finally:
     driver.quit()
 
-print("全取得完了。総ツイート数:", len(all_tweets))
+print("全取得完了。総ツイート数:", len(all_tweet_data))
 
-# Google Driveへの保存処理
+# 追記保存処理
 history_file = "日付テスト用.xlsx"
 history_id = get_file_id(history_file)
 
@@ -166,9 +135,10 @@ if history_id:
 else:
     history_df = pd.DataFrame(columns=["Tweet", "ScreenName", "TweetTime"])
 
-new_data = pd.DataFrame(all_tweets)
-history_df = pd.concat([history_df, new_data], ignore_index=True)
+new_df = pd.DataFrame(all_tweet_data)
+history_df = pd.concat([history_df, new_df], ignore_index=True)
 
+# ExcelファイルをDriveに保存
 with io.BytesIO() as fh:
     with pd.ExcelWriter(fh, engine='xlsxwriter') as writer:
         history_df.to_excel(writer, index=False)
