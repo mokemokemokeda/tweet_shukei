@@ -47,7 +47,7 @@ def download_google_sheets_file(file_id):
 
 # 日本時間の現在時刻取得
 def get_japan_now():
-    return datetime.now(timezone('Asia/Tokyo')).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(timezone('Asia/Tokyo')).strftime("%m/%d %H:%M")
 
 # Chromeオプション
 CHROME_OPTIONS = Options()
