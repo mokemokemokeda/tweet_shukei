@@ -46,8 +46,11 @@ def download_google_sheets_file(file_id):
     return fh
 
 # 日本時間の現在時刻取得
-def get_japan_now():
-    return datetime.now(timezone('Asia/Tokyo')).strftime("%m/%d %H:%M")
+def get_japan_now1():
+    return datetime.now(timezone('Asia/Tokyo')).strftime("%m/%d")
+
+def get_japan_now2():
+    return datetime.now(timezone('Asia/Tokyo')).strftime("%H:%M")
 
 # Chromeオプション
 CHROME_OPTIONS = Options()
@@ -70,12 +73,14 @@ def extract_tweets(driver, max_tweets=100):
             screen_name = el.find_element(By.XPATH, './/a[contains(@class, "Tweet_authorID")]').text.lstrip('@')
             time_element = el.find_element(By.XPATH, './/time')
             tweet_time = time_element.text
-            now_japan_time = get_japan_now()
+            now_japan_time1 = get_japan_now1()
+            now_japan_time2 = get_japan_now2()
             tweets_data.append({
                 "Tweet": tweet_text,
                 "ScreenName": screen_name,
                 "TweetTime": tweet_time,
-                "CollectedTime_JST": now_japan_time
+                "date_JST": now_japan_time1,
+                "time_JST": now_japan_time2
             })
         except NoSuchElementException:
             continue
@@ -140,7 +145,7 @@ if history_id:
     else:
         history_df = pd.read_excel(f"https://drive.google.com/uc?id={history_id}")
 else:
-    history_df = pd.DataFrame(columns=["Tweet", "ScreenName", "TweetTime", "CollectedTime_JST"])
+    history_df = pd.DataFrame(columns=["Tweet", "ScreenName", "TweetTime", "date_JST", "time_JST"])
 
 new_df = pd.DataFrame(all_tweet_data)
 history_df = pd.concat([history_df, new_df], ignore_index=True)
