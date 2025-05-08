@@ -153,7 +153,7 @@ finally:
 print("全取得完了。総ツイート数:", len(all_tweets))
 
 # Google Driveへの保存処理
-history_file = "Priorche_tweet_shukei.xlsx"
+history_file = "日付テスト用.xlsx"
 history_id = get_file_id(history_file)
 
 if history_id:
