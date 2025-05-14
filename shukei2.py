@@ -109,7 +109,7 @@ driver = webdriver.Chrome(options=CHROME_OPTIONS)
 
 all_tweet_data = []
 try:
-    for i in range(2):  # 2回繰り返し
+    for i in range(12):  # 12回繰り返し(1時間)
         print(f"{i+1}回目の取得中...")
         driver.get(f'https://search.yahoo.co.jp/realtime/search?p={url_encoded_keyword}')
         time.sleep(2)
@@ -127,7 +127,7 @@ try:
         all_tweet_data.extend(tweet_data)
         print(f"　取得ツイート数: {len(tweet_data)}")
 
-        time.sleep(5)
+        time.sleep(300) # 5分ごとに取得
 finally:
     driver.quit()
 
